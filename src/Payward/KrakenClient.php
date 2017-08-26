@@ -83,13 +83,6 @@ class KrakenClient
         );
     }
 
-    public function __destruct()
-    {
-        if (\function_exists('curl_close')) {
-            \curl_close($this->curl);
-        }
-    }
-
     /**
      * Query public methods.
      *
