@@ -35,7 +35,7 @@ use Payward\Exception\RuntimeException;
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-class KrakenClient
+class KrakenClient implements KrakenClientInterface
 {
     protected $key;     // API key
     protected $secret;  // API secret
@@ -50,9 +50,11 @@ class KrakenClient
      * @param string $secret    API secret
      * @param string $url       base URL for Kraken API
      * @param string $version   API version
-     * @param bool   $sslverify enable/disable SSL peer verification.  disable if using beta.api.kraken.com
+     * @param bool   $sslVerify enable/disable SSL peer verification.  disable if using beta.api.kraken.com
+     *
+     * @throws \Payward\Exception\InvalidArgumentException
      */
-    public function __construct($key, $secret, $url = 'https://api.kraken.com', $version = '0', $sslverify = true)
+    public function __construct($key, $secret, $url = 'https://api.kraken.com', $version = '0', $sslVerify = true)
     {
         /* check we have curl */
         if (!\function_exists('curl_init')) {
@@ -61,12 +63,12 @@ class KrakenClient
         }
 
         $this->key = $key;
-        $secret = \base64_decode($secret, true);
-        if (false === $secret) {
+        $decodedSecret = \base64_decode($secret, true);
+        if (false === $decodedSecret) {
             throw new InvalidArgumentException('Invalid API secret given');
         }
 
-        $this->secret = $secret;
+        $this->secret = $decodedSecret;
         $this->url = $url;
         $this->version = $version;
         $this->curl = \curl_init();
@@ -74,7 +76,7 @@ class KrakenClient
         \curl_setopt_array(
             $this->curl,
             [
-                CURLOPT_SSL_VERIFYPEER => $sslverify,
+                CURLOPT_SSL_VERIFYPEER => $sslVerify,
                 CURLOPT_SSL_VERIFYHOST => 2,
                 CURLOPT_USERAGENT => 'Kraken PHP API Agent',
                 CURLOPT_POST => true,
@@ -84,23 +86,16 @@ class KrakenClient
     }
 
     /**
-     * Query public methods.
-     *
-     * @param string $method  method name
-     * @param array  $request request parameters
-     *
-     * @throws RuntimeException
-     *
-     * @return array request result on success
+     * {@inheritdoc}
      */
     public function QueryPublic($method, array $request = [])
     {
         // build the POST data string
-        $postdata = \http_build_query($request, '', '&');
+        $requestData = \http_build_query($request, '', '&');
 
         // make request
         \curl_setopt($this->curl, CURLOPT_URL, $this->url.'/'.$this->version.'/public/'.$method);
-        \curl_setopt($this->curl, CURLOPT_POSTFIELDS, $postdata);
+        \curl_setopt($this->curl, CURLOPT_POSTFIELDS, $requestData);
         \curl_setopt($this->curl, CURLOPT_HTTPHEADER, []);
         $result = \curl_exec($this->curl);
         if ($result === false) {
@@ -117,14 +112,7 @@ class KrakenClient
     }
 
     /**
-     * Query private methods.
-     *
-     * @param string $method  method path
-     * @param array  $request request parameters
-     *
-     * @throws RuntimeException
-     *
-     * @return array request result on success
+     * {@inheritdoc}
      */
     public function QueryPrivate($method, array $request = [])
     {
@@ -136,13 +124,13 @@ class KrakenClient
         }
 
         // build the POST data string
-        $postdata = \http_build_query($request, '', '&');
+        $requestData = \http_build_query($request, '', '&');
 
         // set API key and sign the message
         $path = '/'.$this->version.'/private/'.$method;
         $sign = \hash_hmac(
             'sha512',
-            $path.\hash('sha256', $request['nonce'].$postdata, true),
+            $path.\hash('sha256', $request['nonce'].$requestData, true),
             $this->secret,
             true
         );
@@ -153,7 +141,7 @@ class KrakenClient
 
         // make request
         \curl_setopt($this->curl, CURLOPT_URL, $this->url.$path);
-        \curl_setopt($this->curl, CURLOPT_POSTFIELDS, $postdata);
+        \curl_setopt($this->curl, CURLOPT_POSTFIELDS, $requestData);
         \curl_setopt($this->curl, CURLOPT_HTTPHEADER, $headers);
         $result = \curl_exec($this->curl);
         if ($result === false) {
